@@ -1,25 +1,38 @@
 import os
 import requests
 from flask import Flask, request
-from groq import Groq
 
 app = Flask(__name__)
 
 LINE_TOKEN = os.environ.get("LINE_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
-client = Groq(api_key=GROQ_API_KEY)
+def ask_groq(message):
+    response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "model": "llama-3.3-70b-versatile",
+            "messages": [{"role": "user", "content": message}]
+        }
+    )
+    return response.json()["choices"][0]["message"]["content"]
 
 def reply_to_line(reply_token, text):
-    headers = {
-        "Authorization": f"Bearer {LINE_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    body = {
-        "replyToken": reply_token,
-        "messages": [{"type": "text", "text": text}]
-    }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+    requests.post(
+        "https://api.line.me/v2/bot/message/reply",
+        headers={
+            "Authorization": f"Bearer {LINE_TOKEN}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "replyToken": reply_token,
+            "messages": [{"type": "text", "text": text}]
+        }
+    )
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -29,11 +42,7 @@ def webhook():
             user_message = event["message"]["text"]
             reply_token = event["replyToken"]
             try:
-                response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[{"role": "user", "content": user_message}]
-                )
-                reply_text = response.choices[0].message.content
+                reply_text = ask_groq(user_message)
             except Exception as e:
                 reply_text = f"錯誤：{str(e)}"
             reply_to_line(reply_token, reply_text)
