@@ -1,15 +1,14 @@
 import os
 import requests
 from flask import Flask, request
-import google.generativeai as genai
+from groq import Groq
 
 app = Flask(__name__)
 
 LINE_TOKEN = os.environ.get("LINE_TOKEN")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-2.0-flash")
+client = Groq(api_key=GROQ_API_KEY)
 
 def reply_to_line(reply_token, text):
     headers = {
@@ -30,8 +29,11 @@ def webhook():
             user_message = event["message"]["text"]
             reply_token = event["replyToken"]
             try:
-                response = model.generate_content(user_message)
-                reply_text = response.text
+                response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": user_message}]
+                )
+                reply_text = response.choices[0].message.content
             except Exception as e:
                 reply_text = f"錯誤：{str(e)}"
             reply_to_line(reply_token, reply_text)
